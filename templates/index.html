@@ -1,0 +1,232 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatBot</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .chat-container {
+            height: 500px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+        .message {
+            margin: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 70%;
+            word-wrap: break-word;
+            animation: fadeIn 0.3s ease-in;
+        }
+        .user-message {
+            background-color: #3B82F6;
+            color: white;
+            margin-left: auto;
+        }
+        .bot-message {
+            background-color: #F3F4F6;
+            color: black;
+            margin-right: auto;
+        }
+        .typing {
+            display: none;
+            margin: 10px;
+            padding: 10px;
+        }
+        .typing span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #90A4AE;
+            border-radius: 50%;
+            margin-right: 3px;
+            animation: bounce 0.5s infinite;
+        }
+        .typing span:nth-child(2) { animation-delay: 0.1s; }
+        .typing span:nth-child(3) { animation-delay: 0.2s; }
+        
+        .history-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .history-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1001;
+        }
+
+        .history-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 20px;
+            width: 80%;
+            max-width: 600px;
+            max-height: 70vh;
+            overflow-y: auto;
+            border-radius: 8px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-lg">
+            <div class="chat-container p-4" id="chat-container">
+                <!-- Messages -->
+            </div>
+            <div id="typing" class="typing">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+            <div class="border-t p-4">
+                <form id="chat-form" class="flex gap-2">
+                    <input type="text" id="message-input" 
+                           class="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                           placeholder="Écrivez votre message..."
+                           autocomplete="off">
+                    <button type="submit" 
+                            class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                        Envoyer
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bouton Historique -->
+    <button onclick="showHistory()" class="history-button px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
+        Historique
+    </button>
+
+    <!-- Modal Historique -->
+    <div id="historyModal" class="history-modal">
+        <div class="history-content">
+            <h2 class="text-xl font-bold mb-4">Historique des conversations</h2>
+            <div id="historyContent"></div>
+            <button onclick="closeHistory()" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                Fermer
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const chatForm = document.getElementById('chat-form');
+        const messageInput = document.getElementById('message-input');
+        const typingIndicator = document.getElementById('typing');
+        const historyModal = document.getElementById('historyModal');
+        const historyContent = document.getElementById('historyContent');
+
+        function showTyping() {
+            typingIndicator.style.display = 'block';
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function hideTyping() {
+            typingIndicator.style.display = 'none';
+        }
+
+        function addMessage(content, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender === 'user' ? 'user-message' : 'bot-message'}`;
+            messageDiv.textContent = content;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function showHistory() {
+            try {
+                const response = await fetch('/get_history');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    historyContent.innerHTML = data.history.map(entry => `
+                        <div class="mb-4 p-2 border-b">
+                            <div class="text-gray-500 text-sm">${entry.timestamp}</div>
+                            <div class="mt-1"><strong>Vous:</strong> ${entry.user}</div>
+                            <div class="mt-1"><strong>Bot:</strong> ${entry.bot}</div>
+                        </div>
+                    `).join('');
+                    
+                    historyModal.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Erreur lors de la récupération de l\'historique:', error);
+            }
+        }
+
+        function closeHistory() {
+            historyModal.style.display = 'none';
+        }
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            messageInput.disabled = true;
+            addMessage(message, 'user');
+            messageInput.value = '';
+            
+            showTyping();
+
+            try {
+                const response = await fetch('/send_message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message }),
+                });
+                
+                const data = await response.json();
+                
+                hideTyping();
+                
+                if (data.status === 'success') {
+                    addMessage(data.response, 'bot');
+                } else {
+                    addMessage("Désolé, une erreur s'est produite.", 'bot');
+                }
+            } catch (error) {
+                hideTyping();
+                addMessage("Désolé, une erreur s'est produite.", 'bot');
+                console.error('Erreur:', error);
+            } finally {
+                messageInput.disabled = false;
+                messageInput.focus();
+            }
+        });
+
+        // Message de bienvenue
+        addMessage("Bonjour! Je suis là pour discuter. Comment puis-je vous aider?", 'bot');
+
+        // Fermer le modal d'historique si on clique en dehors
+        window.onclick = function(event) {
+            if (event.target === historyModal) {
+                closeHistory();
+            }
+        }
+    </script>
+</body>
+</html>
